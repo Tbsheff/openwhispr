@@ -1,0 +1,31 @@
+{
+  "name": "@openwhispr/mcp-server",
+  "version": "1.0.0",
+  "description": "MCP server for OpenWhispr — Cloudflare Worker with GitHub OAuth",
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "migrate": "tsx src/migrate.ts",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:mcp:local": "tsx scripts/smoke-mcp-local.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.12.1",
+    "@neondatabase/serverless": "^1.0.0",
+    "hono": "^4.7.0",
+    "zod": "^3.25.20"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20250525.0",
+    "@types/node": "^22.15.0",
+    "@types/pg": "^8.20.0",
+    "pg": "^8.21.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.8.0",
+    "vitest": "^4.1.7",
+    "wrangler": "^4.19.0"
+  }
+}

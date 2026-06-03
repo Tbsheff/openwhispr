@@ -12,6 +12,7 @@ import { useUpdater } from "../hooks/useUpdater";
 import { useSettings } from "../hooks/useSettings";
 import { useAuth } from "../hooks/useAuth";
 import { useUsage } from "../hooks/useUsage";
+import { hasIncludedTeamAccess } from "../lib/teamAccess";
 import {
   useTranscriptions,
   initializeTranscriptions,
@@ -211,6 +212,8 @@ export default function ControlPanel() {
   }, [updateError, toast, t]);
 
   useEffect(() => {
+    if (hasIncludedTeamAccess()) return;
+
     const dispose = window.electronAPI?.onLimitReached?.(
       (data: { wordsUsed: number; limit: number }) => {
         if (!hasShownUpgradePrompt.current) {

@@ -28,11 +28,10 @@ import {
 import { cn } from "../lib/utils";
 import WorkspaceMembersTab from "./WorkspaceMembersTab";
 import WorkspaceTeamsTab from "./WorkspaceTeamsTab";
-import WorkspaceBillingTab from "./WorkspaceBillingTab";
 import WorkspaceDeveloperTab from "./WorkspaceDeveloperTab";
 import type { Workspace } from "../../types/electron";
 
-const SUB_TABS = ["general", "members", "teams", "billing", "developer"] as const;
+const SUB_TABS = ["general", "members", "teams", "developer"] as const;
 type WorkspaceTab = (typeof SUB_TABS)[number];
 
 interface Props {
@@ -172,7 +171,6 @@ export default function WorkspaceSection({ initialSubTab }: Props) {
         {tab === "general" && <GeneralTab workspace={workspace} />}
         {tab === "members" && <WorkspaceMembersTab workspace={workspace} />}
         {tab === "teams" && <WorkspaceTeamsTab workspace={workspace} />}
-        {tab === "billing" && <WorkspaceBillingTab workspace={workspace} />}
         {tab === "developer" && <WorkspaceDeveloperTab workspace={workspace} />}
       </div>
 

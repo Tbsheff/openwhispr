@@ -11,6 +11,8 @@ import {
   Shield,
   Command,
   UserCircle,
+  Building2,
+  Loader2,
 } from "lucide-react";
 import TitleBar from "./TitleBar";
 import WindowControls from "./WindowControls";
@@ -38,6 +40,14 @@ import logger from "../utils/logger";
 import { ActivationModeSelector } from "./ui/ActivationModeSelector";
 import TranscriptionModelPicker from "./TranscriptionModelPicker";
 import { ACCESSIBILITY_SKIPPED_KEY, areRequiredPermissionsMet } from "../utils/permissions";
+import { WORKSPACES_ENABLED } from "../lib/features";
+import { useWorkspaceStore } from "../stores/workspaceStore";
+import { InvitationsService } from "../services/InvitationsService";
+import {
+  clearPendingInvitationToken,
+  consumePendingInvitationToken,
+} from "./AcceptInvitationModal";
+import { prepareOnboardingWorkspace } from "../helpers/onboardingWorkspaceBootstrap";
 
 interface OnboardingFlowProps {
   onComplete: () => void;
@@ -45,7 +55,7 @@ interface OnboardingFlowProps {
 
 export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
   const { t } = useTranslation();
-  const { isSignedIn } = useAuth();
+  const { isSignedIn, user } = useAuth();
 
   const getMaxStep = () => (isSignedIn ? 2 : 3);
 
@@ -100,6 +110,11 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
   const [pendingVerificationEmail, setPendingVerificationEmail] = useState<string | null>(null);
   const [isModelDownloaded, setIsModelDownloaded] = useState(false);
   const [isUsingNativeShortcut, setIsUsingNativeShortcut] = useState(false);
+  const [workspaceBootstrap, setWorkspaceBootstrap] = useState<{
+    status: "idle" | "loading" | "ready" | "error";
+    messageKey?: string;
+    workspaceName?: string;
+  }>({ status: WORKSPACES_ENABLED ? "idle" : "ready" });
   const readableHotkey = formatHotkeyLabel(hotkey);
   const { alertDialog, confirmDialog, showAlertDialog, hideAlertDialog, hideConfirmDialog } =
     useDialogs();
@@ -110,6 +125,10 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
 
   const autoRegisterInFlightRef = useRef(false);
   const hotkeyStepInitializedRef = useRef(false);
+  const workspaceBootstrapInFlightRef = useRef(false);
+  const refreshWorkspaces = useWorkspaceStore((s) => s.refresh);
+  const createWorkspace = useWorkspaceStore((s) => s.createWorkspace);
+  const setActiveWorkspaceId = useWorkspaceStore((s) => s.setActiveWorkspaceId);
 
   const { registerHotkey, isRegistering: isHotkeyRegistering } = useHotkeyRegistration({
     onSuccess: (registeredHotkey) => {
@@ -129,6 +148,56 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
   useClipboard(showAlertDialog); // Initialize clipboard hook for permission checks
 
   const systemAudio = useSystemAudioPermission();
+
+  const defaultWorkspaceName = useMemo(() => {
+    const email = user?.email ?? "";
+    const domain = email.includes("@") ? email.split("@")[1]?.split(".")[0] : "";
+    if (domain) return `${domain.charAt(0).toUpperCase()}${domain.slice(1)} Workspace`;
+    if (user?.name) return `${user.name.split(" ")[0]} Workspace`;
+    return "OpenWhispr Workspace";
+  }, [user?.email, user?.name]);
+
+  const prepareWorkspace = useCallback(async () => {
+    if (!WORKSPACES_ENABLED || workspaceBootstrapInFlightRef.current) return;
+
+    workspaceBootstrapInFlightRef.current = true;
+    setWorkspaceBootstrap({ status: "loading" });
+
+    try {
+      const result = await prepareOnboardingWorkspace({
+        getPendingInvitationToken: consumePendingInvitationToken,
+        acceptInvitation: InvitationsService.accept,
+        clearPendingInvitationToken,
+        refreshWorkspaces,
+        getWorkspaceState: useWorkspaceStore.getState,
+        createWorkspace,
+        setActiveWorkspaceId,
+        defaultWorkspaceName,
+      });
+      setWorkspaceBootstrap({
+        status: "ready",
+        ...result,
+      });
+    } catch (error) {
+      logger.error(
+        "Failed to prepare onboarding workspace",
+        { error: error instanceof Error ? error.message : String(error) },
+        "workspaces"
+      );
+      setWorkspaceBootstrap({
+        status: "error",
+        messageKey: "onboarding.setup.workspace.errorDescription",
+      });
+    } finally {
+      workspaceBootstrapInFlightRef.current = false;
+    }
+  }, [createWorkspace, defaultWorkspaceName, refreshWorkspaces, setActiveWorkspaceId]);
+
+  useEffect(() => {
+    if (!WORKSPACES_ENABLED || !isSignedIn || skipAuth || currentStep < 1) return;
+    if (workspaceBootstrap.status !== "idle") return;
+    void prepareWorkspace();
+  }, [currentStep, isSignedIn, prepareWorkspace, skipAuth, workspaceBootstrap.status]);
 
   useEffect(() => {
     if (permissionsHook.accessibilityPermissionGranted && accessibilitySkipped) {
@@ -427,6 +496,60 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
     [setUseLocalWhisper, removeCurrentStep, onComplete]
   );
 
+  const renderWorkspaceBootstrap = () => {
+    if (!WORKSPACES_ENABLED) return null;
+
+    const isLoading = workspaceBootstrap.status === "loading";
+    const isError = workspaceBootstrap.status === "error";
+    const messageKey =
+      workspaceBootstrap.messageKey ??
+      (isLoading
+        ? "onboarding.setup.workspace.preparingDescription"
+        : "onboarding.setup.workspace.readyDescription");
+
+    return (
+      <div className="rounded-lg border border-border/60 bg-surface-1 p-3">
+        <div className="flex items-start gap-3">
+          <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary">
+            {isLoading ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Building2 className="h-4 w-4" />
+            )}
+          </div>
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-medium text-foreground">
+              {isError
+                ? t("onboarding.setup.workspace.errorTitle")
+                : isLoading
+                  ? t("onboarding.setup.workspace.preparingTitle")
+                  : t("onboarding.setup.workspace.readyTitle")}
+            </p>
+            <p className="mt-0.5 text-xs leading-relaxed text-muted-foreground">
+              {t(messageKey, {
+                name: workspaceBootstrap.workspaceName ?? defaultWorkspaceName,
+              })}
+            </p>
+          </div>
+          {isError && (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="h-7 shrink-0 text-xs"
+              onClick={() => {
+                setWorkspaceBootstrap({ status: "idle" });
+                void prepareWorkspace();
+              }}
+            >
+              {t("onboarding.setup.workspace.retry")}
+            </Button>
+          )}
+        </div>
+      </div>
+    );
+  };
+
   const renderStep = () => {
     switch (currentStep) {
       case 0: // Authentication (with Welcome)
@@ -469,6 +592,8 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
                 </h2>
                 <p className="text-muted-foreground">{t("onboarding.setup.description")}</p>
               </div>
+
+              {renderWorkspaceBootstrap()}
 
               {/* Language Selector */}
               <div className="space-y-2.5 p-3 bg-muted/50 border border-border/60 rounded">
@@ -684,7 +809,10 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
       case 1:
         // For signed-in users: Setup step includes permissions
         if (isSignedIn && !skipAuth) {
-          return areRequiredPermissionsMet(permissionsHook.micPermissionGranted);
+          const workspaceReady = !WORKSPACES_ENABLED || workspaceBootstrap.status === "ready";
+          return (
+            workspaceReady && areRequiredPermissionsMet(permissionsHook.micPermissionGranted)
+          );
         }
 
         // For non-signed-in users: Setup - check if configuration is complete

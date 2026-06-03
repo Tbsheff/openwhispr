@@ -181,7 +181,18 @@
     "setup": {
       "title": "Setup",
       "description": "Choose your language and grant permissions",
-      "language": "Language"
+      "language": "Language",
+      "workspace": {
+        "preparingTitle": "Preparing your workspace",
+        "preparingDescription": "We are getting team sharing ready before you start dictating.",
+        "readyTitle": "Workspace ready",
+        "readyDescription": "{{name}} is active for notes, search, and MCP access.",
+        "createdDescription": "Created {{name}} so your team has a shared place to work.",
+        "joinedDescription": "Invitation accepted. Your shared workspace is active.",
+        "errorTitle": "Workspace setup needs attention",
+        "errorDescription": "We could not prepare your workspace. Retry before continuing.",
+        "retry": "Retry"
+      }
     },
     "permissions": {
       "title": "Permissions",
