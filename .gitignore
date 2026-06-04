@@ -122,6 +122,10 @@ build/Release
 node_modules/
 jspm_packages/
 
+# MCP local runtime state and secrets
+mcp-server/.dev.vars
+mcp-server/.wrangler/
+
 # Snowpack dependency directory (https://snowpack.dev/)
 web_modules/
 

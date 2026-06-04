@@ -1,0 +1,20 @@
+name = "openwhispr-mcp"
+main = "src/index.ts"
+compatibility_date = "2025-05-26"
+compatibility_flags = ["nodejs_compat"]
+
+# Auth state (pending codes, registered clients, revoked tokens)
+[[kv_namespaces]]
+binding = "AUTH_KV"
+id = "placeholder"        # Replace after: wrangler kv namespace create AUTH_KV
+preview_id = "placeholder" # Replace after: wrangler kv namespace create AUTH_KV --preview
+
+[vars]
+SERVER_URL = "https://openwhispr-mcp.your-subdomain.workers.dev"
+
+# Set secrets via: wrangler secret put <NAME>
+# DATABASE_URL
+# GITHUB_CLIENT_ID
+# GITHUB_CLIENT_SECRET
+# GITHUB_ORG
+# JWT_SECRET

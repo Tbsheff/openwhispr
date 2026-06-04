@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { useAuth } from "./useAuth";
 import { CACHE_CONFIG } from "../config/constants";
 import { withSessionRefresh } from "../lib/auth";
+import { hasIncludedTeamAccess } from "../lib/teamAccess";
 
 interface UsageData {
   wordsUsed: number;
@@ -62,6 +63,26 @@ interface UseUsageResult {
 
 const USAGE_CACHE_TTL = CACHE_CONFIG.API_KEY_TTL; // 1 hour
 
+function getIncludedTeamUsage(): UsageData {
+  return {
+    wordsUsed: 0,
+    wordsRemaining: -1,
+    limit: 0,
+    plan: "business",
+    status: "active",
+    isSubscribed: true,
+    isTrial: false,
+    trialDaysLeft: null,
+    currentPeriodEnd: null,
+    billingInterval: null,
+    resetAt: "included",
+  };
+}
+
+function createUsageError(message: string, code: unknown): Error & { code?: unknown } {
+  return Object.assign(new Error(message), { code });
+}
+
 export function useUsage(): UseUsageResult | null {
   const { isSignedIn, isLoaded } = useAuth();
   const [data, setData] = useState<UsageData | null>(null);
@@ -73,6 +94,16 @@ export function useUsage(): UseUsageResult | null {
   const lastFetchRef = useRef<number>(0);
 
   const fetchUsage = useCallback(async () => {
+    if (hasIncludedTeamAccess()) {
+      setData(getIncludedTeamUsage());
+      lastFetchRef.current = Date.now();
+      localStorage.setItem("isSubscribed", "true");
+      setError(null);
+      setIsLoading(false);
+      setHasLoaded(true);
+      return;
+    }
+
     if (!window.electronAPI?.cloudUsage) return;
 
     setIsLoading(true);
@@ -98,9 +129,7 @@ export function useUsage(): UseUsageResult | null {
           lastFetchRef.current = Date.now();
           localStorage.setItem("isSubscribed", String(result.isSubscribed ?? false));
         } else {
-          const error: any = new Error(result.error || "Failed to fetch usage");
-          error.code = result.code;
-          throw error;
+          throw createUsageError(result.error || "Failed to fetch usage", result.code);
         }
       });
     } catch (err) {
@@ -166,6 +195,8 @@ export function useUsage(): UseUsageResult | null {
       plan?: "monthly" | "annual";
       tier?: "pro" | "business";
     }): Promise<{ success: boolean; error?: string }> => {
+      if (hasIncludedTeamAccess()) return { success: true };
+
       if (checkoutInFlightRef.current)
         return { success: false, error: "Checkout already in progress" };
       if (!window.electronAPI?.cloudCheckout || !window.electronAPI?.openExternal) {
@@ -190,6 +221,8 @@ export function useUsage(): UseUsageResult | null {
   );
 
   const openBillingPortal = useCallback(async (): Promise<{ success: boolean; error?: string }> => {
+    if (hasIncludedTeamAccess()) return { success: true };
+
     if (checkoutInFlightRef.current) return { success: false, error: "Already loading" };
     if (!window.electronAPI?.cloudBillingPortal || !window.electronAPI?.openExternal) {
       return { success: false, error: "App not ready" };
@@ -215,6 +248,8 @@ export function useUsage(): UseUsageResult | null {
       plan: "monthly" | "annual";
       tier: "pro" | "business";
     }): Promise<{ success: boolean; alreadyOnPlan?: boolean; error?: string }> => {
+      if (hasIncludedTeamAccess()) return { success: true, alreadyOnPlan: true };
+
       if (checkoutInFlightRef.current) return { success: false, error: "Already loading" };
       if (!window.electronAPI?.cloudSwitchPlan) {
         return { success: false, error: "App not ready" };
@@ -237,6 +272,10 @@ export function useUsage(): UseUsageResult | null {
 
   const previewSwitchPlan = useCallback(
     async (opts: { plan: "monthly" | "annual"; tier: "pro" | "business" }) => {
+      if (hasIncludedTeamAccess()) {
+        return { success: true as const, alreadyOnPlan: true };
+      }
+
       if (!window.electronAPI?.cloudPreviewSwitch) {
         return { success: false as const, error: "App not ready" };
       }

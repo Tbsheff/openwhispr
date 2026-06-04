@@ -20,8 +20,7 @@ class SyncService {
   canSync(): boolean {
     return (
       localStorage.getItem("isSignedIn") === "true" &&
-      localStorage.getItem("cloudBackupEnabled") === "true" &&
-      localStorage.getItem("isSubscribed") === "true"
+      localStorage.getItem("cloudBackupEnabled") === "true"
     );
   }
 
