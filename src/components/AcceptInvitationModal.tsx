@@ -13,6 +13,10 @@ import { InvitationsService } from "../services/InvitationsService";
 import { useWorkspaceStore } from "../stores/workspaceStore";
 import { useToast } from "./ui/useToast";
 import type { InvitationPreview } from "../types/electron";
+import {
+  clearPendingInvitationToken,
+  storePendingInvitationToken,
+} from "../lib/pendingInvitationToken";
 
 interface Props {
   token: string | null;
@@ -20,8 +24,6 @@ interface Props {
   isSignedIn: boolean;
   onSignIn: () => void;
 }
-
-const STORAGE_KEY = "pendingInvitationToken";
 
 export default function AcceptInvitationModal({ token, onClose, isSignedIn, onSignIn }: Props) {
   const { t } = useTranslation();
@@ -49,16 +51,16 @@ export default function AcceptInvitationModal({ token, onClose, isSignedIn, onSi
   async function handleAccept() {
     if (!token) return;
     if (!isSignedIn) {
-      localStorage.setItem(STORAGE_KEY, token);
+      storePendingInvitationToken(token);
       onSignIn();
       return;
     }
     setAccepting(true);
     try {
       const result = await InvitationsService.accept(token);
-      localStorage.removeItem(STORAGE_KEY);
       await refresh();
       setActive(result.workspace_id);
+      clearPendingInvitationToken();
       toast({
         title: t("workspaces.accept.successTitle"),
         description: preview
@@ -78,7 +80,7 @@ export default function AcceptInvitationModal({ token, onClose, isSignedIn, onSi
   }
 
   function handleDecline() {
-    if (token) localStorage.removeItem(STORAGE_KEY);
+    if (token) clearPendingInvitationToken();
     onClose();
   }
 
@@ -114,15 +116,4 @@ export default function AcceptInvitationModal({ token, onClose, isSignedIn, onSi
       </DialogContent>
     </Dialog>
   );
-}
-
-export function consumePendingInvitationToken(): string | null {
-  if (typeof window === "undefined") return null;
-  const token = localStorage.getItem(STORAGE_KEY);
-  return token;
-}
-
-export function clearPendingInvitationToken(): void {
-  if (typeof window === "undefined") return;
-  localStorage.removeItem(STORAGE_KEY);
 }

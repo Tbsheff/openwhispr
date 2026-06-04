@@ -20,7 +20,7 @@ import ApiKeysSection from "./ApiKeysSection";
 import CliIntegrationCard from "./CliIntegrationCard";
 import McpIntegrationCard from "./McpIntegrationCard";
 import googleCalendarIcon from "../assets/icons/google-calendar.svg";
-import { hasIncludedTeamAccess } from "../lib/teamAccess";
+import { getTeamAccessPolicy } from "../lib/teamAccess";
 
 const API_DOCS_URL = "https://docs.openwhispr.com/api/overview";
 
@@ -39,7 +39,7 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
 
 export default function IntegrationsView({ isPaid, onUpgrade }: IntegrationsViewProps) {
   const { t } = useTranslation();
-  const hasIntegrationAccess = hasIncludedTeamAccess() || isPaid;
+  const hasIntegrationAccess = getTeamAccessPolicy().entitlements.integrationAccess || isPaid;
   const { gcalAccounts, setGcalAccounts, gcalPrimaryOnly, setGcalPrimaryOnly } = useSettingsStore();
   const [isConnecting, setIsConnecting] = useState(false);
   const [disconnectingEmail, setDisconnectingEmail] = useState<string | null>(null);

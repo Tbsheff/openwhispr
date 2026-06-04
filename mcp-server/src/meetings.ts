@@ -4,10 +4,11 @@ import { z } from "zod";
 import type { Db, DbParam, Row } from "./db.js";
 import {
   appendScopeFilters,
+  authorizeResourceScope,
   hasResourceScope,
   resourceScopeSchema,
   scopeResponse,
-  toResourceScope,
+  type AccessContext,
   type ResourceScope,
 } from "./scope.js";
 
@@ -57,6 +58,7 @@ interface AccountInfoRow extends Row {
 
 interface AccountInfoContext {
   authInfo?: AuthInfo;
+  accessContext: AccessContext;
   githubOrg?: string;
   serverUrl?: string;
 }
@@ -367,7 +369,7 @@ async function getAccountInfo(db: Db, context: AccountInfoContext, scope: Resour
   };
 }
 
-export function registerMeetingTools(server: McpServer, db: Db, context: AccountInfoContext = {}): void {
+export function registerMeetingTools(server: McpServer, db: Db, context: AccountInfoContext): void {
   server.tool("query_openwhispr_meetings", "Ask a natural-language question over OpenWhispr meeting notes. Returns matching meetings and a compact context block.", {
     ...resourceScopeSchema,
     query: z.string().min(1),
@@ -375,7 +377,8 @@ export function registerMeetingTools(server: McpServer, db: Db, context: Account
     limit: z.number().int().min(1).max(50).default(10),
   }, async ({ query, folder_id, limit, workspace_id, team_id }) => {
     try {
-      return jsonContent(await getMeetings(db, { query, folderId: folder_id, limit, scope: toResourceScope({ workspace_id, team_id }) }));
+      const scope = authorizeResourceScope({ workspace_id, team_id }, context.accessContext);
+      return jsonContent(await getMeetings(db, { query, folderId: folder_id, limit, scope }));
     } catch (error) {
       return errorContent(errorMessage(error));
     }
@@ -385,7 +388,7 @@ export function registerMeetingTools(server: McpServer, db: Db, context: Account
     ...resourceScopeSchema,
   }, async ({ workspace_id, team_id }) => {
     try {
-      return jsonContent(await listMeetingFolders(db, toResourceScope({ workspace_id, team_id })));
+      return jsonContent(await listMeetingFolders(db, authorizeResourceScope({ workspace_id, team_id }, context.accessContext)));
     } catch (error) {
       return errorContent(errorMessage(error));
     }
@@ -400,13 +403,14 @@ export function registerMeetingTools(server: McpServer, db: Db, context: Account
     limit: z.number().int().min(1).max(100).default(25),
   }, async ({ folder_id, attendee, start_date, end_date, limit, workspace_id, team_id }) => {
     try {
+      const scope = authorizeResourceScope({ workspace_id, team_id }, context.accessContext);
       return jsonContent(await listMeetings(db, {
         folderId: folder_id,
         attendee,
         startDate: start_date,
         endDate: end_date,
         limit,
-        scope: toResourceScope({ workspace_id, team_id }),
+        scope,
       }));
     } catch (error) {
       return errorContent(errorMessage(error));
@@ -421,7 +425,8 @@ export function registerMeetingTools(server: McpServer, db: Db, context: Account
     limit: z.number().int().min(1).max(50).default(10),
   }, async ({ ids, query, folder_id, limit, workspace_id, team_id }) => {
     try {
-      return jsonContent(await getMeetings(db, { ids, query, folderId: folder_id, limit, scope: toResourceScope({ workspace_id, team_id }) }));
+      const scope = authorizeResourceScope({ workspace_id, team_id }, context.accessContext);
+      return jsonContent(await getMeetings(db, { ids, query, folderId: folder_id, limit, scope }));
     } catch (error) {
       return errorContent(errorMessage(error));
     }
@@ -432,7 +437,7 @@ export function registerMeetingTools(server: McpServer, db: Db, context: Account
     id: z.number().int().min(1),
   }, async ({ id, workspace_id, team_id }) => {
     try {
-      const transcript = await getMeetingTranscript(db, id, toResourceScope({ workspace_id, team_id }));
+      const transcript = await getMeetingTranscript(db, id, authorizeResourceScope({ workspace_id, team_id }, context.accessContext));
       if (!transcript) return { content: [{ type: "text" as const, text: `Meeting ${id} not found.` }], isError: true };
       return jsonContent(transcript);
     } catch (error) {
@@ -444,7 +449,7 @@ export function registerMeetingTools(server: McpServer, db: Db, context: Account
     ...resourceScopeSchema,
   }, async ({ workspace_id, team_id }) => {
     try {
-      return jsonContent(await getAccountInfo(db, context, toResourceScope({ workspace_id, team_id })));
+      return jsonContent(await getAccountInfo(db, context, authorizeResourceScope({ workspace_id, team_id }, context.accessContext)));
     } catch (error) {
       return errorContent(errorMessage(error));
     }

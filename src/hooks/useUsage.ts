@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { useAuth } from "./useAuth";
 import { CACHE_CONFIG } from "../config/constants";
 import { withSessionRefresh } from "../lib/auth";
-import { hasIncludedTeamAccess } from "../lib/teamAccess";
+import { getTeamAccessPolicy } from "../lib/teamAccess";
 
 interface UsageData {
   wordsUsed: number;
@@ -64,12 +64,14 @@ interface UseUsageResult {
 const USAGE_CACHE_TTL = CACHE_CONFIG.API_KEY_TTL; // 1 hour
 
 function getIncludedTeamUsage(): UsageData {
+  const policy = getTeamAccessPolicy();
+
   return {
     wordsUsed: 0,
     wordsRemaining: -1,
     limit: 0,
-    plan: "business",
-    status: "active",
+    plan: policy.plan,
+    status: policy.status,
     isSubscribed: true,
     isTrial: false,
     trialDaysLeft: null,
@@ -92,9 +94,12 @@ export function useUsage(): UseUsageResult | null {
   const [checkoutLoading, setCheckoutLoading] = useState(false);
   const checkoutInFlightRef = useRef(false);
   const lastFetchRef = useRef<number>(0);
+  const teamAccessPolicy = getTeamAccessPolicy();
+  const unmeteredUsage = teamAccessPolicy.entitlements.unmeteredUsage;
+  const billingIncluded = teamAccessPolicy.entitlements.billingIncluded;
 
   const fetchUsage = useCallback(async () => {
-    if (hasIncludedTeamAccess()) {
+    if (unmeteredUsage) {
       setData(getIncludedTeamUsage());
       lastFetchRef.current = Date.now();
       localStorage.setItem("isSubscribed", "true");
@@ -138,7 +143,7 @@ export function useUsage(): UseUsageResult | null {
       setIsLoading(false);
       setHasLoaded(true);
     }
-  }, []);
+  }, [unmeteredUsage]);
 
   const pendingRefetchRef = useRef(false);
 
@@ -171,6 +176,7 @@ export function useUsage(): UseUsageResult | null {
     const handleUpgradeSuccess = async () => {
       lastFetchRef.current = 0;
       await fetchUsage();
+      if (unmeteredUsage) return;
       // Retry if webhook hasn't updated DB yet
       for (let i = 0; i < 3; i++) {
         const result = await window.electronAPI.cloudUsage();
@@ -188,14 +194,14 @@ export function useUsage(): UseUsageResult | null {
       window.removeEventListener("usage-changed", handleUsageChanged);
       window.removeEventListener("upgrade-success", handleUpgradeSuccess);
     };
-  }, [isLoaded, isSignedIn, fetchUsage]);
+  }, [isLoaded, isSignedIn, fetchUsage, unmeteredUsage]);
 
   const openCheckout = useCallback(
     async (opts?: {
       plan?: "monthly" | "annual";
       tier?: "pro" | "business";
     }): Promise<{ success: boolean; error?: string }> => {
-      if (hasIncludedTeamAccess()) return { success: true };
+      if (billingIncluded) return { success: true };
 
       if (checkoutInFlightRef.current)
         return { success: false, error: "Checkout already in progress" };
@@ -217,11 +223,11 @@ export function useUsage(): UseUsageResult | null {
         setCheckoutLoading(false);
       }
     },
-    []
+    [billingIncluded]
   );
 
   const openBillingPortal = useCallback(async (): Promise<{ success: boolean; error?: string }> => {
-    if (hasIncludedTeamAccess()) return { success: true };
+    if (billingIncluded) return { success: true };
 
     if (checkoutInFlightRef.current) return { success: false, error: "Already loading" };
     if (!window.electronAPI?.cloudBillingPortal || !window.electronAPI?.openExternal) {
@@ -241,14 +247,16 @@ export function useUsage(): UseUsageResult | null {
       checkoutInFlightRef.current = false;
       setCheckoutLoading(false);
     }
-  }, []);
+  }, [billingIncluded]);
 
   const switchPlan = useCallback(
     async (opts: {
       plan: "monthly" | "annual";
       tier: "pro" | "business";
     }): Promise<{ success: boolean; alreadyOnPlan?: boolean; error?: string }> => {
-      if (hasIncludedTeamAccess()) return { success: true, alreadyOnPlan: true };
+      if (billingIncluded) {
+        return { success: true, alreadyOnPlan: true };
+      }
 
       if (checkoutInFlightRef.current) return { success: false, error: "Already loading" };
       if (!window.electronAPI?.cloudSwitchPlan) {
@@ -267,12 +275,12 @@ export function useUsage(): UseUsageResult | null {
         setCheckoutLoading(false);
       }
     },
-    [fetchUsage]
+    [fetchUsage, billingIncluded]
   );
 
   const previewSwitchPlan = useCallback(
     async (opts: { plan: "monthly" | "annual"; tier: "pro" | "business" }) => {
-      if (hasIncludedTeamAccess()) {
+      if (billingIncluded) {
         return { success: true as const, alreadyOnPlan: true };
       }
 
@@ -281,7 +289,7 @@ export function useUsage(): UseUsageResult | null {
       }
       return window.electronAPI.cloudPreviewSwitch(opts);
     },
-    []
+    [billingIncluded]
   );
 
   if (!isSignedIn) return null;

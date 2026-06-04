@@ -12,7 +12,7 @@ import { useUpdater } from "../hooks/useUpdater";
 import { useSettings } from "../hooks/useSettings";
 import { useAuth } from "../hooks/useAuth";
 import { useUsage } from "../hooks/useUsage";
-import { hasIncludedTeamAccess } from "../lib/teamAccess";
+import { getTeamAccessPolicy } from "../lib/teamAccess";
 import {
   useTranscriptions,
   initializeTranscriptions,
@@ -43,11 +43,12 @@ import { fetchProviders as fetchStreamingProviders } from "../stores/streamingPr
 import HistoryView from "./HistoryView";
 import BackgroundActionToastListener from "./notes/BackgroundActionToastListener";
 import { syncService } from "../services/SyncService.js";
-import AcceptInvitationModal, {
-  consumePendingInvitationToken,
-  clearPendingInvitationToken,
-} from "./AcceptInvitationModal";
+import AcceptInvitationModal from "./AcceptInvitationModal";
 import { WORKSPACES_ENABLED } from "../lib/features";
+import {
+  clearPendingInvitationToken,
+  consumePendingInvitationToken,
+} from "../lib/pendingInvitationToken";
 
 const platform = getCachedPlatform();
 
@@ -111,6 +112,7 @@ export default function ControlPanel() {
   } = useSettings();
   const { isSignedIn, isLoaded: authLoaded, user } = useAuth();
   const usage = useUsage();
+  const teamAccessPolicy = getTeamAccessPolicy();
 
   const {
     status: updateStatus,
@@ -212,7 +214,7 @@ export default function ControlPanel() {
   }, [updateError, toast, t]);
 
   useEffect(() => {
-    if (hasIncludedTeamAccess()) return;
+    if (teamAccessPolicy.entitlements.suppressPaywallPrompts) return;
 
     const dispose = window.electronAPI?.onLimitReached?.(
       (data: { wordsUsed: number; limit: number }) => {
@@ -233,7 +235,7 @@ export default function ControlPanel() {
     return () => {
       dispose?.();
     };
-  }, [toast, t]);
+  }, [teamAccessPolicy.entitlements.suppressPaywallPrompts, toast, t]);
 
   useEffect(() => {
     if (!usage?.isPastDue || !usage.hasLoaded) return;

@@ -34,7 +34,26 @@ test("accepts pending invitation before inspecting workspaces", async () => {
     messageKey: "onboarding.setup.workspace.joinedDescription",
   });
   assert.deepEqual(calls, [
+    ["refreshWorkspaces"],
+    ["setActiveWorkspaceId", "accepted-workspace"],
     ["clearPendingInvitationToken"],
+  ]);
+});
+
+test("keeps pending invitation token when local workspace activation fails", async () => {
+  const { prepareOnboardingWorkspace } = await import(
+    "../../src/helpers/onboardingWorkspaceBootstrap.js"
+  );
+  const { deps, calls } = createDeps({
+    getPendingInvitationToken: () => "invite-token",
+    setActiveWorkspaceId: (id) => {
+      calls.push(["setActiveWorkspaceId", id]);
+      throw new Error("activation failed");
+    },
+  });
+
+  await assert.rejects(() => prepareOnboardingWorkspace(deps), /activation failed/);
+  assert.deepEqual(calls, [
     ["refreshWorkspaces"],
     ["setActiveWorkspaceId", "accepted-workspace"],
   ]);
