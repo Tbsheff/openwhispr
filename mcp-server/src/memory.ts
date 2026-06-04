@@ -3,10 +3,11 @@ import { z } from "zod";
 import type { Db, DbParam, Row } from "./db.js";
 import {
   appendScopeFilters,
+  authorizeResourceScope,
   hasResourceScope,
   resourceScopeSchema,
   scopeResponse,
-  toResourceScope,
+  type AccessContext,
   type ResourceScope,
 } from "./scope.js";
 
@@ -353,7 +354,7 @@ async function getMemoryStats(db: Db, scope: ResourceScope): Promise<MemoryStats
   return stats;
 }
 
-export function registerMemoryTools(server: McpServer, db: Db): void {
+export function registerMemoryTools(server: McpServer, db: Db, accessContext: AccessContext): void {
   server.tool("remember_memory", "Create a durable OpenWhispr memory for facts, preferences, decisions, tasks, or notes.", {
     ...resourceScopeSchema,
     title: z.string().optional(),
@@ -365,11 +366,12 @@ export function registerMemoryTools(server: McpServer, db: Db): void {
     created_by: z.string().optional(),
   }, async ({ title, content, kind, tags, source_type, source_id, created_by, workspace_id, team_id }) => {
     try {
+      const scope = authorizeResourceScope({ workspace_id, team_id }, accessContext);
       const row = await db.getOne<MemoryRow>(`
         INSERT INTO memories (title, content, kind, tags, source_type, source_id, created_by, workspace_id, team_id)
         VALUES ($1, $2, $3, $4::text[], $5, $6, $7, $8, $9)
         RETURNING id, title, content, kind, tags, source_type, source_id, workspace_id, team_id, created_by, created_at, updated_at
-      `, [title ?? defaultMemoryTitle(content), content, kind, tags, source_type ?? null, source_id ?? null, created_by ?? null, workspace_id ?? null, team_id ?? null]);
+      `, [title ?? defaultMemoryTitle(content), content, kind, tags, source_type ?? null, source_id ?? null, created_by ?? null, scope.workspaceId ?? null, scope.teamId ?? null]);
       return jsonContent(row);
     } catch (error) {
       return errorContent(errorMessage(error));
@@ -384,7 +386,8 @@ export function registerMemoryTools(server: McpServer, db: Db): void {
     limit: z.number().int().min(1).max(100).default(20),
   }, async ({ query, kind, tags, limit, workspace_id, team_id }) => {
     try {
-      return jsonContent(await searchMemories(db, { query, kind, tags, limit, scope: toResourceScope({ workspace_id, team_id }) }));
+      const scope = authorizeResourceScope({ workspace_id, team_id }, accessContext);
+      return jsonContent(await searchMemories(db, { query, kind, tags, limit, scope }));
     } catch (error) {
       return errorContent(errorMessage(error));
     }
@@ -395,9 +398,10 @@ export function registerMemoryTools(server: McpServer, db: Db): void {
     id: z.number().int().min(1),
   }, async ({ id, workspace_id, team_id }) => {
     try {
+      const scope = authorizeResourceScope({ workspace_id, team_id }, accessContext);
       const params: DbParam[] = [id];
       const filters = ["id = $1", "deleted_at IS NULL"];
-      appendScopeFilters(filters, params, toResourceScope({ workspace_id, team_id }));
+      appendScopeFilters(filters, params, scope);
       const row = await db.getOne<MemoryRow>(`
         SELECT id, title, content, kind, tags, source_type, source_id, workspace_id, team_id, created_by, created_at, updated_at
         FROM memories
@@ -421,6 +425,7 @@ export function registerMemoryTools(server: McpServer, db: Db): void {
     source_id: z.string().nullable().optional(),
   }, async ({ id, title, content, kind, tags, source_type, source_id, workspace_id, team_id }) => {
     try {
+      const scope = authorizeResourceScope({ workspace_id, team_id }, accessContext);
       const sets = ["updated_at = now()"];
       const params: DbParam[] = [];
       let i = 1;
@@ -434,7 +439,7 @@ export function registerMemoryTools(server: McpServer, db: Db): void {
 
       params.push(id);
       const filters = [`id = $${i}`, "deleted_at IS NULL"];
-      appendScopeFilters(filters, params, toResourceScope({ workspace_id, team_id }));
+      appendScopeFilters(filters, params, scope);
       const row = await db.getOne<MemoryRow>(`
         UPDATE memories
         SET ${sets.join(", ")}
@@ -454,9 +459,10 @@ export function registerMemoryTools(server: McpServer, db: Db): void {
     id: z.number().int().min(1),
   }, async ({ id, workspace_id, team_id }) => {
     try {
+      const scope = authorizeResourceScope({ workspace_id, team_id }, accessContext);
       const params: DbParam[] = [id];
       const filters = ["id = $1", "deleted_at IS NULL"];
-      appendScopeFilters(filters, params, toResourceScope({ workspace_id, team_id }));
+      appendScopeFilters(filters, params, scope);
       const result = await db.query(`UPDATE memories SET deleted_at = now(), updated_at = now() WHERE ${filters.join(" AND ")}`, params);
       if (result.rowCount === 0) return { content: [{ type: "text" as const, text: `Memory ${id} not found.` }], isError: true };
       return { content: [{ type: "text" as const, text: `Memory ${id} deleted.` }] };
@@ -476,6 +482,7 @@ export function registerMemoryTools(server: McpServer, db: Db): void {
     folder_id: z.number().int().optional(),
   }, async ({ query, limit, max_context_chars, include_memories, include_notes, include_transcriptions, folder_id, workspace_id, team_id }) => {
     try {
+      const scope = authorizeResourceScope({ workspace_id, team_id }, accessContext);
       return jsonContent(await queryCorpus(db, {
         query,
         limit,
@@ -484,7 +491,7 @@ export function registerMemoryTools(server: McpServer, db: Db): void {
         includeNotes: include_notes,
         includeTranscriptions: include_transcriptions,
         folderId: folder_id,
-        scope: toResourceScope({ workspace_id, team_id }),
+        scope,
       }));
     } catch (error) {
       return errorContent(errorMessage(error));
@@ -495,7 +502,7 @@ export function registerMemoryTools(server: McpServer, db: Db): void {
     ...resourceScopeSchema,
   }, async ({ workspace_id, team_id }) => {
     try {
-      return jsonContent(await getMemoryStats(db, toResourceScope({ workspace_id, team_id })));
+      return jsonContent(await getMemoryStats(db, authorizeResourceScope({ workspace_id, team_id }, accessContext)));
     } catch (error) {
       return errorContent(errorMessage(error));
     }
@@ -507,7 +514,7 @@ export function registerMemoryTools(server: McpServer, db: Db): void {
     try {
       const startedAt = Date.now();
       const row = await db.getOne<MemoryStatusRow>("SELECT 1::int AS ok");
-      const scope = toResourceScope({ workspace_id, team_id });
+      const scope = authorizeResourceScope({ workspace_id, team_id }, accessContext);
       const stats = await getMemoryStats(db, scope);
       return jsonContent({
         healthy: row?.ok === 1,

@@ -11,9 +11,9 @@ export async function prepareOnboardingWorkspace({
   const pendingInvitation = getPendingInvitationToken();
   if (pendingInvitation) {
     const accepted = await acceptInvitation(pendingInvitation);
-    clearPendingInvitationToken();
     await refreshWorkspaces();
     setActiveWorkspaceId(accepted.workspace_id);
+    clearPendingInvitationToken();
     return {
       messageKey: "onboarding.setup.workspace.joinedDescription",
     };

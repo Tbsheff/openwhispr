@@ -24,7 +24,7 @@ import InviteTeammateDialog from "./InviteTeammateDialog";
 import CreateWorkspaceDialog from "./CreateWorkspaceDialog";
 import { useWorkspace } from "../hooks/useWorkspace";
 import { WORKSPACES_ENABLED } from "../lib/features";
-import { hasIncludedTeamAccess } from "../lib/teamAccess";
+import { getTeamAccessPolicy } from "../lib/teamAccess";
 
 const platform = getCachedPlatform();
 
@@ -79,7 +79,7 @@ export default function ControlPanelSidebar({
   const [createWorkspaceOpen, setCreateWorkspaceOpen] = useState(false);
   const { active: activeWorkspace } = useWorkspace();
 
-  const paywallBannersEnabled = !hasIncludedTeamAccess();
+  const paywallBannersEnabled = !getTeamAccessPolicy().entitlements.suppressPaywallPrompts;
   const showLimitBanner =
     paywallBannersEnabled && authLoaded && isSignedIn && !isProUser && isOverLimit;
   const showUpgradeBanner =
