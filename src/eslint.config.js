@@ -44,23 +44,14 @@ export default [
   // utils/ bounded context — enforce no-explicit-any for type safety
   {
     files: ["utils/**/*.ts"],
-    plugins: {
-      "@typescript-eslint": tseslint.plugin,
-    },
-    languageOptions: {
-      parser: tseslint.parser,
-      parserOptions: {
-        ecmaVersion: "latest",
-        sourceType: "module",
-      },
-    },
-    rules: {
-      "@typescript-eslint/no-explicit-any": "error",
-    },
+    plugins: { "@typescript-eslint": tseslint.plugin },
+    languageOptions: { parser: tseslint.parser },
+    rules: { "@typescript-eslint/no-explicit-any": "error" },
   },
-  // TypeScript files
+  // TypeScript files (excludes utils/**/*.ts which has its own block above)
   {
     files: ["**/*.{ts,tsx}"],
+    ignores: ["utils/**/*.ts"],
     languageOptions: {
       ecmaVersion: 2022,
       globals: {
