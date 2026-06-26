@@ -48,7 +48,7 @@ const shouldLog = (level: LogLevel, current: LogLevel) => {
   return LOG_LEVELS[level] >= LOG_LEVELS[current];
 };
 
-const logToConsole = (level: LogLevel, message: string, meta?: any, scope?: string) => {
+const logToConsole = (level: LogLevel, message: string, meta?: unknown, scope?: string) => {
   const levelTag = `[${level.toUpperCase()}]`;
   const scopeTag = scope ? `[${scope}]` : "";
   const consoleFn =
@@ -64,7 +64,7 @@ const logToConsole = (level: LogLevel, message: string, meta?: any, scope?: stri
   }
 };
 
-const log = async (level: LogLevel, message: string, meta?: any, scope?: string) => {
+const log = async (level: LogLevel, message: string, meta?: unknown, scope?: string) => {
   const currentLevel = await resolveLogLevel();
   if (!shouldLog(level, currentLevel)) return;
 
@@ -87,13 +87,13 @@ const log = async (level: LogLevel, message: string, meta?: any, scope?: string)
 };
 
 const logger = {
-  trace: (message: string, meta?: any, scope?: string) => log("trace", message, meta, scope),
-  debug: (message: string, meta?: any, scope?: string) => log("debug", message, meta, scope),
-  info: (message: string, meta?: any, scope?: string) => log("info", message, meta, scope),
-  warn: (message: string, meta?: any, scope?: string) => log("warn", message, meta, scope),
-  error: (message: string, meta?: any, scope?: string) => log("error", message, meta, scope),
-  fatal: (message: string, meta?: any, scope?: string) => log("fatal", message, meta, scope),
-  logReasoning: (stage: string, details?: any) => log("debug", stage, details, "reasoning"),
+  trace: (message: string, meta?: unknown, scope?: string) => log("trace", message, meta, scope),
+  debug: (message: string, meta?: unknown, scope?: string) => log("debug", message, meta, scope),
+  info: (message: string, meta?: unknown, scope?: string) => log("info", message, meta, scope),
+  warn: (message: string, meta?: unknown, scope?: string) => log("warn", message, meta, scope),
+  error: (message: string, meta?: unknown, scope?: string) => log("error", message, meta, scope),
+  fatal: (message: string, meta?: unknown, scope?: string) => log("fatal", message, meta, scope),
+  logReasoning: (stage: string, details?: unknown) => log("debug", stage, details, "reasoning"),
   refreshLogLevel: () => {
     cachedLevel = null;
     levelPromise = null;

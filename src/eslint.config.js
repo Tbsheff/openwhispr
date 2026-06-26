@@ -5,7 +5,7 @@ import reactRefresh from "eslint-plugin-react-refresh";
 import tseslint from "typescript-eslint";
 
 export default [
-  { ignores: ["dist", "helpers/**", "utils/**"] },
+  { ignores: ["dist", "helpers/**", "utils/**/*.js"] },
   // JS and JSX files (renderer - ES modules)
   {
     files: ["**/*.{js,jsx}"],
@@ -39,6 +39,23 @@ export default [
       "no-useless-catch": "off",
       "no-async-promise-executor": "off",
       "react-refresh/only-export-components": ["warn", { allowConstantExport: true }],
+    },
+  },
+  // utils/ bounded context — enforce no-explicit-any for type safety
+  {
+    files: ["utils/**/*.ts"],
+    plugins: {
+      "@typescript-eslint": tseslint.plugin,
+    },
+    languageOptions: {
+      parser: tseslint.parser,
+      parserOptions: {
+        ecmaVersion: "latest",
+        sourceType: "module",
+      },
+    },
+    rules: {
+      "@typescript-eslint/no-explicit-any": "error",
     },
   },
   // TypeScript files
