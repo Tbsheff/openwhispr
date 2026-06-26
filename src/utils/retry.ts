@@ -5,7 +5,7 @@ export interface RetryOptions {
   initialDelay?: number;
   maxDelay?: number;
   backoffMultiplier?: number;
-  shouldRetry?: (error: any) => boolean;
+  shouldRetry?: (error: unknown) => boolean;
 }
 
 export async function withRetry<T>(fn: () => Promise<T>, options: RetryOptions = {}): Promise<T> {
@@ -17,7 +17,7 @@ export async function withRetry<T>(fn: () => Promise<T>, options: RetryOptions =
     shouldRetry = () => true,
   } = options;
 
-  let lastError: any;
+  let lastError: unknown;
   let delay = initialDelay;
 
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
@@ -42,12 +42,18 @@ export async function withRetry<T>(fn: () => Promise<T>, options: RetryOptions =
 // Specific retry strategy for API calls
 export function createApiRetryStrategy() {
   return {
-    shouldRetry: (error: any) => {
-      // Retry on network errors or 5xx status codes
-      if (!error.response) return true; // Network error
-
-      const status = error.response?.status || error.status;
-      return status >= 500 && status < 600;
+    shouldRetry: (error: unknown) => {
+      if (typeof error !== "object" || error === null) return true; // Network error
+      const err = error as Record<string, unknown>;
+      if (!err["response"]) return true; // Network error
+      const response = err["response"] as Record<string, unknown>;
+      const status =
+        typeof response["status"] === "number"
+          ? response["status"]
+          : typeof err["status"] === "number"
+            ? err["status"]
+            : undefined;
+      return status !== undefined && status >= 500 && status < 600;
     },
   };
 }
@@ -55,10 +61,12 @@ export function createApiRetryStrategy() {
 // Specific retry strategy for file operations
 export function createFileRetryStrategy() {
   return {
-    shouldRetry: (error: any) => {
-      // Retry on temporary file system errors
+    shouldRetry: (error: unknown) => {
       const retriableErrors = ["EBUSY", "ENOENT", "EPERM", "EAGAIN"];
-      return retriableErrors.includes(error.code);
+      if (typeof error === "object" && error !== null && "code" in error) {
+        return retriableErrors.includes((error as { code: string }).code);
+      }
+      return false;
     },
     maxRetries: 2,
     initialDelay: 500,
